@@ -1,0 +1,69 @@
+#!/bin/bash
+BOLD="\033[1m"     # жирный
+DIM="\033[2m"      # приглушённый
+RESET="\033[0m"    # сброс всех атрибутов и цветов (вообще)
+FRED="\033[31m"    # красный текст
+FWHITE="\033[97m"  # белый текст
+FGREEN="\033[32m"  # зелёный текст
+BRED="\033[101m"   # красный фон
+BGREEN="\033[42m"  # зелёный фон
+
+print() {
+    echo -e " $*${RESET}"
+}
+
+title() {
+    print "\n${BOLD}${FWHITE}$*\n"
+}
+
+success() {
+    print "${BOLD}${BGREEN}${FWHITE} $* "
+}
+
+error() {
+    print "${BOLD}${BRED}${FWHITE} Error: ${RESET}${FRED} $1 " >&2
+}
+
+# получаем имена всех php-файлов, кроме удалённых, относительно корня репозитория
+FILES=`git status --porcelain | grep -e ".php$" | grep -vP "^\s?D\s" | awk '{if ($1 == "R") { print $4 } else { print $2 }}'`
+
+title "(1/3) Validating code-style (pint)"
+if [ "$FILES" = "" ]; then
+    print "Skipped (no changed files)"
+else
+    ./vendor/bin/pint $FILES
+    if [ $? -eq 0 ]; then
+        success "Code-style is correct!"
+    else
+        error "Code-style is NOT correct!"
+        print "You have to fix all errors mentioned above and try again."
+        exit 1
+    fi
+fi
+
+title "(2/3) Running static analysis (larastan)"
+if [ "$FILES" = "" ]; then
+    print "Skipped (no changed files)"
+else
+    ./vendor/bin/phpstan analyse
+    if [ $? -eq 0 ]; then
+        success "Code analisys passed!"
+    else
+        error "Code analisys failed!"
+        print "You have to fix all errors mentioned above and try again."
+        exit 2
+    fi
+fi
+
+title "(3/3) Running tests (phpunit):"
+php artisan test
+if [ $? -eq 0 ]; then
+    success "Tests passed!"
+else
+    error "Tests failed!"
+    print "You have to fix all errors mentioned above and try again."
+    exit 3
+fi
+
+echo
+success "Commit granted!"
